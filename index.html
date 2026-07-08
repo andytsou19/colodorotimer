@@ -373,19 +373,31 @@
   }
 
   .card-save {
-    margin-top: 2px;
-    padding: 2px 6px;
-    border-radius: 6px;
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
     background: rgba(255, 255, 255, 0.1);
     color: var(--muted);
-    font-size: 10px;
-    transition: color 0.15s, background 0.15s;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s, transform 0.1s;
   }
 
   .card-save:hover {
     color: var(--text);
-    background: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.2);
   }
+
+  .card-save:active { transform: scale(0.9); }
 
   .card-delete {
     position: absolute;
@@ -465,11 +477,56 @@
     background: rgba(255, 255, 255, 0.16);
   }
 
-  .save-palette-btn {
-    width: 100%;
-    margin-bottom: 14px;
-    padding: 11px 12px;
-    font-size: 13px;
+  .color-save-btn {
+    flex: 0 0 auto;
+    align-self: flex-end;
+    position: relative;
+    width: 46px;
+    height: 54px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--muted);
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s, border-color 0.15s, transform 0.1s;
+  }
+
+  .color-save-btn:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.28);
+  }
+
+  .color-save-btn:active { transform: scale(0.95); }
+
+  .color-save-btn svg { width: 20px; height: 20px; display: block; }
+
+  .color-save-btn::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    white-space: nowrap;
+    padding: 6px 9px;
+    border-radius: 7px;
+    background: rgba(20, 20, 24, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--text);
+    font-size: 11px;
+    line-height: 1;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.15s, transform 0.15s;
+    z-index: 5;
+  }
+
+  .color-save-btn:hover::after {
+    opacity: 1;
+    transform: translateY(0);
   }
 
   .saved-presets {
@@ -529,10 +586,15 @@
   }
 
   .color-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    align-items: flex-end;
     gap: 12px;
     margin-bottom: 14px;
+  }
+
+  .color-field {
+    flex: 1;
+    min-width: 0;
   }
 
   .color-field label {
@@ -667,6 +729,32 @@
     color: var(--muted);
   }
 
+  #toast {
+    position: fixed;
+    left: 50%;
+    bottom: calc(32px + var(--safe-bottom));
+    transform: translate(-50%, 12px);
+    padding: 10px 18px;
+    border-radius: 999px;
+    background: rgba(20, 20, 24, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+    z-index: 30;
+  }
+
+  #toast.visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translate(-50%, 0);
+  }
+
   /* Landscape (e.g. iPad): split into two columns so it isn't smushed */
   @media (orientation: landscape) and (min-width: 720px) {
     .panel {
@@ -674,7 +762,7 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
       column-gap: 28px;
-      align-items: start;
+      align-items: center;
     }
 
     .panel-col-left,
@@ -690,6 +778,7 @@
 </head>
 <body>
   <div id="canvas"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
   <div id="hint">Click or move to peek · Double-tap to pause</div>
   <div id="holdIndicator" aria-hidden="true">
     <svg viewBox="0 0 72 72">
@@ -746,8 +835,13 @@
             <span class="hex-value" id="endHex">#2a9d8f</span>
           </div>
         </div>
+        <button type="button" class="color-save-btn" id="savePaletteBtn" data-tooltip="Save this color pair" aria-label="Save this color pair">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 5v14"/>
+            <path d="M5 12h14"/>
+          </svg>
+        </button>
       </div>
-      <button type="button" class="btn btn-secondary save-palette-btn" id="savePaletteBtn">Save palette</button>
 
       <div class="duration-row">
         <label for="duration">Duration</label>
@@ -792,21 +886,22 @@
     ];
 
     // Color tabs. `type` drives randomization; curated/saved tabs disable Randomize.
-    const COLOR_TABS = [
+    // Saved tabs are generated dynamically (one per page of 6 saved palettes).
+    const BASE_COLOR_TABS = [
       { id: 'presets', label: 'Presets', type: null, curated: true },
       { id: 'complementary', label: 'Complement', type: 'complementary' },
       { id: 'contrast', label: 'Light/Dark', type: 'contrast' },
       { id: 'sameHue', label: 'Mono', type: 'sameHue' },
       { id: 'mixed', label: 'Mixed', type: 'mixed' },
-      { id: 'saved', label: 'Saved', type: null, saved: true },
     ];
+    const SAVED_PAGE_SIZE = 6;
 
     const DURATION_QUICK_PICKS = [5, 15, 25, 30, 45, 60];
     const STORAGE_KEY_DURATION = 'colodoro:lastDuration';
     const STORAGE_KEY_SAVED_PRESETS = 'colodoro:savedPresets';
     const STORAGE_KEY_TAB = 'colodoro:colorTab';
     const RANDOM_PAIR_COUNT = 6;
-    const MAX_SAVED_PRESETS = 12;
+    const MAX_SAVED_PRESETS = 24;
 
     const canvas = document.getElementById('canvas');
     const hint = document.getElementById('hint');
@@ -820,6 +915,15 @@
     const randomizeBtn = document.getElementById('randomizeBtn');
     const savePaletteBtn = document.getElementById('savePaletteBtn');
     const fullscreenBtn = document.getElementById('fullscreenBtn');
+    const toast = document.getElementById('toast');
+
+    let toastTimer = null;
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add('visible');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('visible'), 1800);
+    }
     const startColorInput = document.getElementById('startColor');
     const endColorInput = document.getElementById('endColor');
     const startHex = document.getElementById('startHex');
@@ -1005,8 +1109,12 @@
       return `palette-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     }
 
+    function isPairSaved(start, end) {
+      return savedPresets.some((p) => p.start === start && p.end === end);
+    }
+
     function saveColorPair(start, end) {
-      if (savedPresets.some((p) => p.start === start && p.end === end)) return false;
+      if (isPairSaved(start, end)) return false;
       if (savedPresets.length >= MAX_SAVED_PRESETS) savedPresets.shift();
 
       savedPresets.push({
@@ -1016,21 +1124,27 @@
         end,
       });
       persistSavedPresets();
-      if (activeTab === 'saved') renderColorTab();
+      buildColorTabs();
+      if (getActiveTab().saved) renderColorTab();
       return true;
     }
 
     function deleteSavedPreset(id) {
       savedPresets = savedPresets.filter((p) => p.id !== id);
       persistSavedPresets();
-      if (activeTab === 'saved') renderColorTab();
+      // If the current saved page no longer exists, fall back to the first one.
+      if (!getColorTabs().some((t) => t.id === activeTab)) {
+        activeTab = 'saved';
+        saveActiveTab(activeTab);
+      }
+      buildColorTabs();
+      renderColorTab();
     }
 
     function saveCurrentPalette() {
       if (state.status === 'running') return;
       const added = saveColorPair(startColorInput.value, endColorInput.value);
-      // Give feedback by jumping to the Saved tab when a new one is stored.
-      if (added && activeTab !== 'saved') setActiveTab('saved');
+      showToast(added ? 'Palette saved' : 'Already saved');
     }
 
     function formatTime(ms) {
@@ -1636,8 +1750,31 @@
       }
     }
 
+    function getSavedPageCount() {
+      return Math.max(1, Math.ceil(savedPresets.length / SAVED_PAGE_SIZE));
+    }
+
+    function getSavedTabs() {
+      const tabs = [];
+      for (let i = 0; i < getSavedPageCount(); i++) {
+        tabs.push({
+          id: i === 0 ? 'saved' : `saved-${i + 1}`,
+          label: i === 0 ? 'Saved' : `Saved ${i + 1}`,
+          type: null,
+          saved: true,
+          savedPage: i,
+        });
+      }
+      return tabs;
+    }
+
+    function getColorTabs() {
+      return BASE_COLOR_TABS.concat(getSavedTabs());
+    }
+
     function getActiveTab() {
-      return COLOR_TABS.find((t) => t.id === activeTab) || COLOR_TABS[0];
+      const tabs = getColorTabs();
+      return tabs.find((t) => t.id === activeTab) || tabs[0];
     }
 
     function makeColorCard(item, opts = {}) {
@@ -1648,6 +1785,7 @@
       card.setAttribute('role', 'button');
       card.tabIndex = 0;
       const label = item.name || `Option ${(opts.index ?? 0) + 1}`;
+      const canSave = opts.showSave && !isPairSaved(item.start, item.end);
       card.innerHTML = `
         ${opts.showDelete ? '<button type="button" class="card-delete" aria-label="Delete palette">×</button>' : ''}
         <div class="preset-swatches">
@@ -1655,7 +1793,7 @@
           <span class="swatch" style="background:${item.end}"></span>
         </div>
         <span>${label}</span>
-        ${opts.showSave ? '<span class="card-save">Save</span>' : ''}
+        ${canSave ? '<button type="button" class="card-save" aria-label="Save this pair" title="Save this pair">+</button>' : ''}
       `;
 
       card.addEventListener('click', (e) => {
@@ -1664,11 +1802,13 @@
         setColors(item.start, item.end);
       });
 
-      if (opts.showSave) {
+      if (canSave) {
         card.querySelector('.card-save').addEventListener('click', (e) => {
           e.stopPropagation();
           if (state.status === 'running') return;
-          saveColorPair(item.start, item.end);
+          const added = saveColorPair(item.start, item.end);
+          showToast(added ? 'Palette saved' : 'Already saved');
+          e.currentTarget.remove();
         });
       }
       if (opts.showDelete) {
@@ -1694,15 +1834,18 @@
       colorCardsEl.innerHTML = '';
 
       if (tab.saved) {
-        if (savedPresets.length === 0) {
+        const page = tab.savedPage || 0;
+        const startIdx = page * SAVED_PAGE_SIZE;
+        const pagePresets = savedPresets.slice(startIdx, startIdx + SAVED_PAGE_SIZE);
+        if (pagePresets.length === 0) {
           const empty = document.createElement('div');
           empty.className = 'color-cards-empty';
-          empty.textContent = 'No saved palettes yet — pick colors and tap Save palette.';
+          empty.textContent = 'No saved palettes yet — tap + on a color to save it.';
           colorCardsEl.appendChild(empty);
           requestFit();
           return;
         }
-        savedPresets.forEach((preset) => {
+        pagePresets.forEach((preset) => {
           colorCardsEl.appendChild(makeColorCard(preset, { showDelete: true }));
         });
         highlightActiveCard();
@@ -1740,7 +1883,7 @@
     function loadActiveTab() {
       try {
         const id = localStorage.getItem(STORAGE_KEY_TAB);
-        if (COLOR_TABS.some((t) => t.id === id)) return id;
+        if (getColorTabs().some((t) => t.id === id)) return id;
       } catch (_) {}
       return 'presets';
     }
@@ -1752,12 +1895,14 @@
     }
 
     function buildColorTabs() {
-      COLOR_TABS.forEach((tab) => {
+      colorTabsEl.innerHTML = '';
+      getColorTabs().forEach((tab) => {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'color-tab';
         btn.dataset.tab = tab.id;
         btn.textContent = tab.label;
+        btn.classList.toggle('active', tab.id === activeTab);
         btn.addEventListener('click', () => setActiveTab(tab.id));
         colorTabsEl.appendChild(btn);
       });
