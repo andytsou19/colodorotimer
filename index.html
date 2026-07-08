@@ -46,6 +46,11 @@
     cursor: default;
   }
 
+  body.hide-cursor,
+  body.hide-cursor * {
+    cursor: none !important;
+  }
+
   #hint {
     position: fixed;
     bottom: calc(24px + var(--safe-bottom));
@@ -129,6 +134,41 @@
     opacity: 1;
     visibility: visible;
   }
+
+  .fullscreen-btn {
+    position: absolute;
+    top: calc(12px + var(--safe-top));
+    right: 12px;
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--muted);
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s, border-color 0.15s, transform 0.1s;
+    z-index: 12;
+  }
+
+  .fullscreen-btn:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .fullscreen-btn:active { transform: scale(0.95); }
+
+  .fullscreen-btn svg {
+    width: 17px;
+    height: 17px;
+    display: block;
+  }
+
+  .fullscreen-btn .icon-compress { display: none; }
+  body.is-fullscreen .fullscreen-btn .icon-expand { display: none; }
+  body.is-fullscreen .fullscreen-btn .icon-compress { display: block; }
 
   .panel {
     width: min(420px, 100%);
@@ -626,6 +666,26 @@
     font-size: 12px;
     color: var(--muted);
   }
+
+  /* Landscape (e.g. iPad): split into two columns so it isn't smushed */
+  @media (orientation: landscape) and (min-width: 720px) {
+    .panel {
+      width: min(780px, 100%);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      column-gap: 28px;
+      align-items: start;
+    }
+
+    .panel-col-left,
+    .panel-col-right {
+      min-width: 0;
+    }
+
+    /* Trailing margins aren't needed at the bottom of each column */
+    .panel-col-right .controls { margin-bottom: 0; }
+    .randomize-btn { margin-bottom: 0; }
+  }
   </style>
 </head>
 <body>
@@ -639,21 +699,38 @@
   </div>
 
   <div id="overlay">
+    <button type="button" id="fullscreenBtn" class="fullscreen-btn" aria-label="Toggle full screen" title="Full screen">
+      <svg class="icon-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8 3H5a2 2 0 0 0-2 2v3"/>
+        <path d="M16 3h3a2 2 0 0 1 2 2v3"/>
+        <path d="M8 21H5a2 2 0 0 1-2-2v-3"/>
+        <path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
+      </svg>
+      <svg class="icon-compress" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8 3v3a2 2 0 0 1-2 2H3"/>
+        <path d="M21 8h-3a2 2 0 0 1-2-2V3"/>
+        <path d="M3 16h3a2 2 0 0 1 2 2v3"/>
+        <path d="M16 21v-3a2 2 0 0 1 2-2h3"/>
+      </svg>
+    </button>
     <div class="panel">
-      <div class="panel-title">
-        <span class="panel-title-text">
-          <img src="favicon.svg" alt="" class="panel-title-icon">
-          Colodoro
-        </span>
+      <div class="panel-col panel-col-left">
+        <div class="panel-title">
+          <span class="panel-title-text">
+            <img src="favicon.svg" alt="" class="panel-title-icon">
+            Colodoro
+          </span>
+        </div>
+        <div class="timer-display" id="timerDisplay">25:00</div>
+        <div class="timer-label" id="timerLabel">Ready</div>
+
+        <div class="section-title">Colors</div>
+        <div class="color-tabs" id="colorTabs"></div>
+        <div class="color-cards" id="colorCards"></div>
+        <button type="button" class="btn btn-secondary randomize-btn" id="randomizeBtn">Randomize colors</button>
       </div>
-      <div class="timer-display" id="timerDisplay">25:00</div>
-      <div class="timer-label" id="timerLabel">Ready</div>
 
-      <div class="section-title">Colors</div>
-      <div class="color-tabs" id="colorTabs"></div>
-      <div class="color-cards" id="colorCards"></div>
-      <button type="button" class="btn btn-secondary randomize-btn" id="randomizeBtn">Randomize colors</button>
-
+      <div class="panel-col panel-col-right">
       <div class="color-row">
         <div class="color-field">
           <label for="startColor">Start color</label>
@@ -686,6 +763,7 @@
       </div>
 
       <p class="dismiss-hint">Double-tap outside to pause or resume</p>
+      </div>
     </div>
   </div>
 
@@ -741,6 +819,7 @@
     const colorCardsEl = document.getElementById('colorCards');
     const randomizeBtn = document.getElementById('randomizeBtn');
     const savePaletteBtn = document.getElementById('savePaletteBtn');
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
     const startColorInput = document.getElementById('startColor');
     const endColorInput = document.getElementById('endColor');
     const startHex = document.getElementById('startHex');
@@ -1461,6 +1540,24 @@
 
     window.addEventListener('wheel', handleWheel, { passive: false });
 
+  // --- Hide cursor when idle ---
+
+    const CURSOR_IDLE_MS = 2500;
+    let cursorIdleTimer = null;
+
+    function showCursor() {
+      document.body.classList.remove('hide-cursor');
+      if (cursorIdleTimer) clearTimeout(cursorIdleTimer);
+      cursorIdleTimer = setTimeout(() => {
+        document.body.classList.add('hide-cursor');
+      }, CURSOR_IDLE_MS);
+    }
+
+    window.addEventListener('mousemove', showCursor, { passive: true });
+    window.addEventListener('mousedown', showCursor, { passive: true });
+    window.addEventListener('wheel', showCursor, { passive: true });
+    showCursor();
+
   // --- Scale-to-fit (never scroll) ---
 
     let fitScheduled = false;
@@ -1490,6 +1587,37 @@
     window.addEventListener('orientationchange', requestFit);
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', requestFit);
+    }
+
+  // --- Fullscreen ---
+
+    function getFullscreenElement() {
+      return document.fullscreenElement || document.webkitFullscreenElement || null;
+    }
+
+    function toggleFullscreen() {
+      const el = document.documentElement;
+      if (!getFullscreenElement()) {
+        const req = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (req) { try { req.call(el); } catch (_) {} }
+      } else {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit) { try { exit.call(document); } catch (_) {} }
+      }
+    }
+
+    function onFullscreenChange() {
+      document.body.classList.toggle('is-fullscreen', !!getFullscreenElement());
+      requestFit();
+    }
+
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+    fullscreenBtn.addEventListener('click', toggleFullscreen);
+
+    // Hide the control if the browser can't do element fullscreen (e.g. iPhone Safari)
+    if (!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen)) {
+      fullscreenBtn.style.display = 'none';
     }
 
   // --- Presets ---

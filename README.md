@@ -16,6 +16,8 @@ Pick a start color and an end color, choose a duration, and start. The screen be
 - **Save palettes** — store your favorite color pairs locally and reuse them from the Saved tab.
 - **Quick durations** — one-tap 5 / 15 / 25 / 30 / 45 / 60 minute presets, plus a 1–60 min slider.
 - **Gesture controls** — peek, pause, and reset with taps, holds, and swipes.
+- **Full-screen mode** — a corner button hides the browser UI for a truly distraction-free display.
+- **Auto-hiding cursor** — the mouse pointer disappears after a couple of idle seconds and returns on movement.
 - **Never scrolls** — the panel automatically scales to fit any screen height.
 - **Remembers your settings** — last duration, saved palettes, and selected color tab persist across reloads.
 
@@ -44,6 +46,11 @@ Pick a start color and an end color, choose a duration, and start. The screen be
 - **Peek vs. pause are separate.** A single click or mouse movement only *peeks* — it never pauses the timer. Pausing requires a deliberate double-tap.
 - **When the timer finishes, nothing happens automatically.** The screen stays at the end color until you interact with it. Reset gestures (hold / swipe up / scroll up) are only active in this finished state.
 - Reset gestures work whether the overlay is open or closed.
+
+### Full-screen and cursor
+
+- **Full-screen** — tap the expand icon in the top-right corner of the control panel to hide the browser chrome (address bar, tabs, etc.). Tap it again (or press `Esc`) to exit. The icon reflects the current state. This uses the browser's Fullscreen API, so the button is hidden on platforms that don't support it (e.g. iPhone Safari).
+- **Auto-hiding cursor** — the mouse pointer hides after ~2.5 seconds of no movement, and reappears the moment you move, click, or scroll. Touch input is unaffected.
 
 ### Colors
 
@@ -109,6 +116,7 @@ This data is per-browser and per-device; it doesn't sync across machines.
 - Plain HTML, CSS, and vanilla JavaScript in one file (`index.html`).
 - No frameworks, no dependencies, no build tooling.
 - Uses the Pointer Events API for unified mouse/touch gesture handling.
+- Uses the Fullscreen API (with `webkit` fallback) for full-screen mode.
 - `favicon.svg` provides a rainbow-tomato tab icon.
 
 ## Running locally
