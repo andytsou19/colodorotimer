@@ -13,7 +13,7 @@ Pick a start color and an end color, choose a duration, and start. The screen be
 - **Color-as-timer** — the background interpolates from the start color to the end color over the session.
 - **Tabbed color picker** — one area with tabs for curated presets, three "opposite" strategies, a mixed mode, and your saved palettes.
 - **Randomize the current tab** — a single Randomize button that regenerates options for whichever strategy tab you're on.
-- **Save palettes** — store your favorite color pairs locally and reuse them from the Saved tab.
+- **Save palettes** — store favorite color pairs with a **+** button; they're organized into paginated Saved tabs (6 per tab).
 - **Quick durations** — one-tap 5 / 15 / 25 / 30 / 45 / 60 minute presets, plus a 1–60 min slider.
 - **Gesture controls** — peek, pause, and reset with taps, holds, and swipes.
 - **Full-screen mode** — a corner button hides the browser UI for a truly distraction-free display.
@@ -63,13 +63,17 @@ Colors live in a single tabbed area. Pick a tab, tap a card to apply that pair, 
 | **Light/Dark** | Generated near-neutral **brightness** opposites, e.g. White ↔ Black | Yes |
 | **Mono** | Generated **same-hue** light↔dark pairs, e.g. Pale blue ↔ Navy | Yes |
 | **Mixed** | Generated pairs randomly drawn from all three strategies above | Yes |
-| **Saved** | Your saved palettes; tap **×** on a card to delete (up to 12) | Greyed out |
+| **Saved** | Your saved palettes; tap **×** on a card to delete (up to 24) | Greyed out |
 
 Other ways to set colors:
 
 - **Manual pick** — use the two color inputs to set exact start and end colors.
-- **Save** — on any generated option card, tap its **Save** link to store that pair.
-- **Save palette** — saves whatever start/end colors are currently active and jumps to the Saved tab.
+- **Save a generated card** — tap the **+** button in the top-right corner of any generated option card. It saves the pair, shows a brief "Palette saved" toast, and the **+** disappears (it won't reappear for pairs you've already saved).
+- **Save the active palette** — tap the **+** button beside the two color inputs to save whatever start/end colors are currently active. Hover it for a tooltip.
+
+Saving never navigates you away from your current tab — you just get a confirmation toast.
+
+**Paginated Saved tabs:** the Saved tab holds 6 palettes. Save a 7th and a **Saved 2** tab appears; a 13th adds **Saved 3**, and so on (up to 24 total). When you delete palettes and a page empties out, its extra tab is removed automatically.
 
 The selected tab is highlighted and remembered between visits.
 

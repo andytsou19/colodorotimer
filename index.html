@@ -4,9 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Colodoro">
+  <meta name="theme-color" content="#0c0c10">
   <title>Colodoro Timer</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="favicon.svg">
   <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -135,10 +139,9 @@
     visibility: visible;
   }
 
-  .fullscreen-btn {
-    position: absolute;
-    top: calc(12px + var(--safe-top));
-    right: 12px;
+  .fullscreen-btn,
+  .share-btn {
+    flex: 0 0 auto;
     width: 34px;
     height: 34px;
     display: inline-flex;
@@ -150,17 +153,19 @@
     color: var(--muted);
     cursor: pointer;
     transition: color 0.15s, background 0.15s, border-color 0.15s, transform 0.1s;
-    z-index: 12;
   }
 
-  .fullscreen-btn:hover {
+  .fullscreen-btn:hover,
+  .share-btn:hover {
     color: var(--text);
     background: rgba(255, 255, 255, 0.12);
   }
 
-  .fullscreen-btn:active { transform: scale(0.95); }
+  .fullscreen-btn:active,
+  .share-btn:active { transform: scale(0.95); }
 
-  .fullscreen-btn svg {
+  .fullscreen-btn svg,
+  .share-btn svg {
     width: 17px;
     height: 17px;
     display: block;
@@ -169,6 +174,17 @@
   .fullscreen-btn .icon-compress { display: none; }
   body.is-fullscreen .fullscreen-btn .icon-expand { display: none; }
   body.is-fullscreen .fullscreen-btn .icon-compress { display: block; }
+
+  .panel-header {
+    display: grid;
+    grid-template-columns: 34px 1fr 34px;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .panel-header .share-btn { justify-self: start; }
+  .panel-header .fullscreen-btn { justify-self: end; }
 
   .panel {
     width: min(420px, 100%);
@@ -184,7 +200,6 @@
 
   .panel-title {
     text-align: center;
-    margin-bottom: 14px;
     font-size: 15px;
     font-weight: 600;
     letter-spacing: 0.04em;
@@ -765,6 +780,10 @@
       align-items: center;
     }
 
+    .panel-header {
+      grid-column: 1 / -1;
+    }
+
     .panel-col-left,
     .panel-col-right {
       min-width: 0;
@@ -773,6 +792,48 @@
     /* Trailing margins aren't needed at the bottom of each column */
     .panel-col-right .controls { margin-bottom: 0; }
     .randomize-btn { margin-bottom: 0; }
+  }
+
+  /* Compact layout for phones in portrait so it fits without heavy scaling */
+  @media (orientation: portrait) and (max-width: 520px) {
+    #overlay {
+      padding: 8px;
+      padding-top: calc(8px + var(--safe-top));
+      padding-bottom: calc(8px + var(--safe-bottom));
+    }
+
+    .panel {
+      width: min(360px, 100%);
+      padding: 14px 16px 12px;
+      border-radius: 18px;
+    }
+
+    .panel-header { margin-bottom: 8px; }
+    .panel-title { font-size: 14px; }
+    .panel-title-icon { width: 17px; height: 17px; }
+
+    .timer-display { font-size: clamp(2rem, 15vw, 3rem); margin-bottom: 3px; }
+    .timer-label { font-size: 11px; margin-bottom: 10px; }
+
+    .section-title { margin-bottom: 7px; }
+
+    .color-cards { gap: 6px; margin-bottom: 8px; }
+    .color-card { padding: 8px 4px 6px; font-size: 10px; }
+
+    .color-row { margin-bottom: 10px; }
+    .color-input-wrap { padding: 6px 8px; gap: 8px; }
+    .color-input-wrap input[type="color"] { width: 30px; height: 30px; }
+    .color-save-btn { width: 42px; height: 46px; }
+
+    .duration-row { margin-bottom: 8px; }
+    .duration-quick { margin-bottom: 10px; }
+
+    .randomize-btn { margin-bottom: 10px; }
+
+    .controls { gap: 8px; }
+    .btn { padding: 10px 8px; font-size: 13px; }
+
+    .dismiss-hint { margin-top: 10px; font-size: 11px; }
   }
   </style>
 </head>
@@ -788,28 +849,37 @@
   </div>
 
   <div id="overlay">
-    <button type="button" id="fullscreenBtn" class="fullscreen-btn" aria-label="Toggle full screen" title="Full screen">
-      <svg class="icon-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M8 3H5a2 2 0 0 0-2 2v3"/>
-        <path d="M16 3h3a2 2 0 0 1 2 2v3"/>
-        <path d="M8 21H5a2 2 0 0 1-2-2v-3"/>
-        <path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
-      </svg>
-      <svg class="icon-compress" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M8 3v3a2 2 0 0 1-2 2H3"/>
-        <path d="M21 8h-3a2 2 0 0 1-2-2V3"/>
-        <path d="M3 16h3a2 2 0 0 1 2 2v3"/>
-        <path d="M16 21v-3a2 2 0 0 1 2-2h3"/>
-      </svg>
-    </button>
     <div class="panel">
-      <div class="panel-col panel-col-left">
+      <div class="panel-header">
+        <button type="button" id="shareBtn" class="share-btn" aria-label="Share or add to home screen" title="Share · Add to Home Screen · Bookmark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3v13"/>
+            <path d="M8 7l4-4 4 4"/>
+            <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>
+          </svg>
+        </button>
         <div class="panel-title">
           <span class="panel-title-text">
             <img src="favicon.svg" alt="" class="panel-title-icon">
             Colodoro
           </span>
         </div>
+        <button type="button" id="fullscreenBtn" class="fullscreen-btn" aria-label="Toggle full screen" title="Full screen">
+          <svg class="icon-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3"/>
+            <path d="M16 3h3a2 2 0 0 1 2 2v3"/>
+            <path d="M8 21H5a2 2 0 0 1-2-2v-3"/>
+            <path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
+          </svg>
+          <svg class="icon-compress" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 3v3a2 2 0 0 1-2 2H3"/>
+            <path d="M21 8h-3a2 2 0 0 1-2-2V3"/>
+            <path d="M3 16h3a2 2 0 0 1 2 2v3"/>
+            <path d="M16 21v-3a2 2 0 0 1 2-2h3"/>
+          </svg>
+        </button>
+      </div>
+      <div class="panel-col panel-col-left">
         <div class="timer-display" id="timerDisplay">25:00</div>
         <div class="timer-label" id="timerLabel">Ready</div>
 
@@ -915,6 +985,7 @@
     const randomizeBtn = document.getElementById('randomizeBtn');
     const savePaletteBtn = document.getElementById('savePaletteBtn');
     const fullscreenBtn = document.getElementById('fullscreenBtn');
+    const shareBtn = document.getElementById('shareBtn');
     const toast = document.getElementById('toast');
 
     let toastTimer = null;
@@ -1733,6 +1804,56 @@
     if (!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen)) {
       fullscreenBtn.style.display = 'none';
     }
+
+  // --- Share / install / bookmark ---
+
+    let deferredInstallPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+    });
+
+    function isStandalone() {
+      return window.matchMedia('(display-mode: standalone)').matches ||
+        window.navigator.standalone === true;
+    }
+
+    async function shareApp() {
+      const url = location.href;
+
+      // 1) Installable PWA (Chrome/Edge/Android): trigger the native install prompt.
+      if (deferredInstallPrompt) {
+        deferredInstallPrompt.prompt();
+        try { await deferredInstallPrompt.userChoice; } catch (_) {}
+        deferredInstallPrompt = null;
+        return;
+      }
+
+      // 2) Native share sheet (iOS/Android) — includes Add to Home Screen / Bookmark.
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: 'Colodoro',
+            text: 'Colodoro — a color Pomodoro timer',
+            url,
+          });
+        } catch (_) {}
+        return;
+      }
+
+      // 3) Fallback: copy the link.
+      try {
+        await navigator.clipboard.writeText(url);
+        showToast('Link copied — bookmark or share it');
+      } catch (_) {
+        showToast('Copy this page URL to share');
+      }
+    }
+
+    shareBtn.addEventListener('click', shareApp);
+
+    // Already installed to the home screen? The button isn't useful there.
+    if (isStandalone()) shareBtn.style.display = 'none';
 
   // --- Presets ---
 
