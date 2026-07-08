@@ -1,0 +1,1701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Colodoro Timer</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --overlay-bg: rgba(12, 12, 16, 0.72);
+    --panel-bg: rgba(24, 24, 32, 0.92);
+    --text: #f4f4f8;
+    --muted: rgba(244, 244, 248, 0.55);
+    --accent: #ffffff;
+    --radius: 16px;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    touch-action: manipulation;
+    background: #1a1a2e;
+  }
+
+  body.gestures-enabled #canvas,
+  body.gestures-enabled #overlay,
+  body.gestures-enabled .panel {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  #canvas {
+    position: fixed;
+    inset: 0;
+    transition: background-color 0.35s linear;
+    cursor: default;
+  }
+
+  #hint {
+    position: fixed;
+    bottom: calc(24px + var(--safe-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+    white-space: nowrap;
+  }
+
+  #hint.hidden { opacity: 0; }
+
+  #holdIndicator {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    z-index: 5;
+  }
+
+  #holdIndicator.active { opacity: 1; z-index: 20; }
+
+  #holdIndicator svg {
+    width: 72px;
+    height: 72px;
+    filter: drop-shadow(0 2px 12px rgba(0, 0, 0, 0.25));
+  }
+
+  #holdIndicator .hold-track {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.2);
+    stroke-width: 3;
+  }
+
+  #holdIndicator .hold-progress {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.9);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-dasharray: 201;
+    stroke-dashoffset: 201;
+    transform: rotate(-90deg);
+    transform-origin: center;
+  }
+
+  #holdIndicator.active .hold-progress {
+    animation: holdProgress var(--hold-duration) linear forwards;
+  }
+
+  @keyframes holdProgress {
+    to { stroke-dashoffset: 0; }
+  }
+
+  #overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    padding-top: calc(12px + var(--safe-top));
+    padding-bottom: calc(12px + var(--safe-bottom));
+    background: var(--overlay-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+    z-index: 10;
+    overflow: hidden;
+  }
+
+  #overlay.visible {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .panel {
+    width: min(420px, 100%);
+    background: var(--panel-bg);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius);
+    padding: 20px 24px 18px;
+    color: var(--text);
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+    transform-origin: center center;
+    will-change: transform;
+  }
+
+  .timer-display {
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    font-size: clamp(2.5rem, 12vw, 4rem);
+    font-weight: 200;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+
+  .timer-label {
+    text-align: center;
+    font-size: 13px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 18px;
+  }
+
+  .section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  .presets {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .preset-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, transform 0.1s;
+    font-size: 11px;
+    line-height: 1.2;
+  }
+
+  .preset-btn:hover { background: rgba(255, 255, 255, 0.08); }
+  .preset-btn:active { transform: scale(0.97); }
+  .preset-btn.active {
+    border-color: rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .preset-swatches {
+    display: flex;
+    gap: 3px;
+  }
+
+  .swatch {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255, 255, 255, 0.25);
+    flex-shrink: 0;
+  }
+
+  .random-modes {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .random-mode-btn {
+    padding: 7px 4px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, color 0.15s, transform 0.1s;
+  }
+
+  .random-mode-btn:hover { background: rgba(255, 255, 255, 0.08); }
+  .random-mode-btn:active { transform: scale(0.97); }
+  .random-mode-btn.active {
+    border-color: rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text);
+  }
+
+  .randomize-btn {
+    width: 100%;
+    margin-bottom: 16px;
+    padding: 11px 12px;
+    font-size: 13px;
+  }
+
+  .color-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .color-tab {
+    flex: 1 1 auto;
+    min-width: 60px;
+    padding: 7px 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, color 0.15s, transform 0.1s;
+  }
+
+  .color-tab:hover { background: rgba(255, 255, 255, 0.08); }
+  .color-tab:active { transform: scale(0.97); }
+  .color-tab.active {
+    border-color: rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text);
+  }
+
+  .color-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 10px;
+    min-height: 10px;
+  }
+
+  .color-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 6px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, transform 0.1s;
+    font-size: 11px;
+    line-height: 1.2;
+    user-select: none;
+  }
+
+  .color-card:hover { background: rgba(255, 255, 255, 0.08); }
+  .color-card:active { transform: scale(0.97); }
+  .color-card.active {
+    border-color: rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .card-save {
+    margin-top: 2px;
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--muted);
+    font-size: 10px;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .card-save:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.16);
+  }
+
+  .card-delete {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 18px;
+    height: 18px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .card-delete:hover {
+    color: #ff8a8a;
+    background: rgba(255, 90, 90, 0.2);
+  }
+
+  .color-cards-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+    padding: 12px 6px;
+  }
+
+  .random-picks {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .random-picks.hidden { display: none; }
+
+  .random-pick-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, transform 0.1s;
+    font-size: 11px;
+    line-height: 1.2;
+  }
+
+  .random-pick-btn:hover { background: rgba(255, 255, 255, 0.08); }
+  .random-pick-btn:active { transform: scale(0.97); }
+  .random-pick-btn.active {
+    border-color: rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .random-pick-save {
+    margin-top: 2px;
+    padding: 2px 6px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--muted);
+    font-size: 10px;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .random-pick-save:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.16);
+  }
+
+  .save-palette-btn {
+    width: 100%;
+    margin-bottom: 14px;
+    padding: 11px 12px;
+    font-size: 13px;
+  }
+
+  .saved-presets {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .saved-presets.hidden,
+  .saved-title.hidden { display: none; }
+
+  .saved-preset-btn {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 6px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, transform 0.1s;
+    font-size: 11px;
+    line-height: 1.2;
+    user-select: none;
+  }
+
+  .saved-preset-btn:hover { background: rgba(255, 255, 255, 0.08); }
+  .saved-preset-btn:active { transform: scale(0.97); }
+  .saved-preset-btn.active {
+    border-color: rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .saved-preset-delete {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 18px;
+    height: 18px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .saved-preset-delete:hover {
+    color: #ff8a8a;
+    background: rgba(255, 90, 90, 0.2);
+  }
+
+  .color-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .color-field label {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .color-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .color-input-wrap input[type="color"] {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 8px;
+    padding: 0;
+    cursor: pointer;
+    background: none;
+  }
+
+  .color-input-wrap input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+  .color-input-wrap input[type="color"]::-webkit-color-swatch {
+    border: 1.5px solid rgba(255, 255, 255, 0.25);
+    border-radius: 8px;
+  }
+
+  .hex-value {
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 13px;
+    color: var(--muted);
+    flex: 1;
+  }
+
+  .duration-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .duration-row label {
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .duration-row input {
+    flex: 1;
+    accent-color: #fff;
+  }
+
+  .duration-row output {
+    font-variant-numeric: tabular-nums;
+    font-size: 14px;
+    min-width: 36px;
+    text-align: right;
+  }
+
+  .duration-quick {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .duration-quick-btn {
+    padding: 8px 4px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, transform 0.1s;
+  }
+
+  .duration-quick-btn:hover { background: rgba(255, 255, 255, 0.08); }
+  .duration-quick-btn:active { transform: scale(0.97); }
+  .duration-quick-btn.active {
+    border-color: rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+  }
+
+  .btn {
+    padding: 14px 8px;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+
+  .btn:active { transform: scale(0.97); }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .btn-primary {
+    background: #fff;
+    color: #111;
+  }
+
+  .btn-secondary {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--text);
+  }
+
+  .btn-danger {
+    background: rgba(255, 90, 90, 0.2);
+    color: #ff8a8a;
+  }
+
+  .dismiss-hint {
+    text-align: center;
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  </style>
+</head>
+<body>
+  <div id="canvas"></div>
+  <div id="hint">Click or move to peek · Double-tap to pause</div>
+  <div id="holdIndicator" aria-hidden="true">
+    <svg viewBox="0 0 72 72">
+      <circle class="hold-track" cx="36" cy="36" r="32"/>
+      <circle class="hold-progress" cx="36" cy="36" r="32"/>
+    </svg>
+  </div>
+
+  <div id="overlay">
+    <div class="panel">
+      <div class="timer-display" id="timerDisplay">25:00</div>
+      <div class="timer-label" id="timerLabel">Ready</div>
+
+      <div class="section-title">Colors</div>
+      <div class="color-tabs" id="colorTabs"></div>
+      <div class="color-cards" id="colorCards"></div>
+      <button type="button" class="btn btn-secondary randomize-btn" id="randomizeBtn">Randomize colors</button>
+
+      <div class="color-row">
+        <div class="color-field">
+          <label for="startColor">Start color</label>
+          <div class="color-input-wrap">
+            <input type="color" id="startColor" value="#e63946">
+            <span class="hex-value" id="startHex">#e63946</span>
+          </div>
+        </div>
+        <div class="color-field">
+          <label for="endColor">End color</label>
+          <div class="color-input-wrap">
+            <input type="color" id="endColor" value="#2a9d8f">
+            <span class="hex-value" id="endHex">#2a9d8f</span>
+          </div>
+        </div>
+      </div>
+      <button type="button" class="btn btn-secondary save-palette-btn" id="savePaletteBtn">Save palette</button>
+
+      <div class="duration-row">
+        <label for="duration">Duration</label>
+        <input type="range" id="duration" min="1" max="60" value="25">
+        <output id="durationOut">25m</output>
+      </div>
+      <div class="duration-quick" id="durationQuick"></div>
+
+      <div class="controls">
+        <button class="btn btn-secondary" id="pauseBtn" disabled>Pause</button>
+        <button class="btn btn-danger" id="resetBtn">Reset</button>
+        <button class="btn btn-primary" id="actionBtn">Start</button>
+      </div>
+
+      <p class="dismiss-hint">Double-tap outside to pause or resume</p>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    const DURATION_MS_DEFAULT = 25 * 60 * 1000;
+    const DOUBLE_TAP_MS = 320;
+    const DOUBLE_TAP_DISTANCE = 40;
+    const PEEK_DURATION_MS = 5000;
+    const LONG_PRESS_MS = 900;
+    const SWIPE_MIN_UP = 60;
+    const SWIPE_MIN_UP_MOUSE = 45;
+    const SWIPE_MAX_SIDE = 70;
+    const HOLD_INDICATOR_DELAY_MS = 120;
+    const SCROLL_UP_RESET_THRESHOLD = 90;
+    const SCROLL_ACCUMULATE_MS = 450;
+
+    // Curated opposite-color pairs (two rows): complementary, light/dark contrast, and mono
+    const PRESETS = [
+      { name: 'Coral & Teal', start: '#e63946', end: '#2a9d8f', type: 'complementary' },
+      { name: 'Amber & Violet', start: '#ffba08', end: '#7b2cbf', type: 'complementary' },
+      { name: 'Snow & Ink', start: '#f5f5f7', end: '#111114', type: 'contrast' },
+      { name: 'Pearl & Onyx', start: '#ece7de', end: '#1a1a1d', type: 'contrast' },
+      { name: 'Sky Fade', start: '#bfe3ff', end: '#0b2545', type: 'sameHue' },
+      { name: 'Mint Deep', start: '#c8f4dd', end: '#14432a', type: 'sameHue' },
+    ];
+
+    // Color tabs. `type` drives randomization; curated/saved tabs disable Randomize.
+    const COLOR_TABS = [
+      { id: 'presets', label: 'Presets', type: null, curated: true },
+      { id: 'complementary', label: 'Complement', type: 'complementary' },
+      { id: 'contrast', label: 'Light/Dark', type: 'contrast' },
+      { id: 'sameHue', label: 'Mono', type: 'sameHue' },
+      { id: 'mixed', label: 'Mixed', type: 'mixed' },
+      { id: 'saved', label: 'Saved', type: null, saved: true },
+    ];
+
+    const DURATION_QUICK_PICKS = [5, 15, 25, 30, 45, 60];
+    const STORAGE_KEY_DURATION = 'colodoro:lastDuration';
+    const STORAGE_KEY_SAVED_PRESETS = 'colodoro:savedPresets';
+    const STORAGE_KEY_TAB = 'colodoro:colorTab';
+    const RANDOM_PAIR_COUNT = 6;
+    const MAX_SAVED_PRESETS = 12;
+
+    const canvas = document.getElementById('canvas');
+    const hint = document.getElementById('hint');
+    const holdIndicator = document.getElementById('holdIndicator');
+    const overlay = document.getElementById('overlay');
+    const panel = overlay.querySelector('.panel');
+    const timerDisplay = document.getElementById('timerDisplay');
+    const timerLabel = document.getElementById('timerLabel');
+    const colorTabsEl = document.getElementById('colorTabs');
+    const colorCardsEl = document.getElementById('colorCards');
+    const randomizeBtn = document.getElementById('randomizeBtn');
+    const savePaletteBtn = document.getElementById('savePaletteBtn');
+    const startColorInput = document.getElementById('startColor');
+    const endColorInput = document.getElementById('endColor');
+    const startHex = document.getElementById('startHex');
+    const endHex = document.getElementById('endHex');
+    const durationInput = document.getElementById('duration');
+    const durationOut = document.getElementById('durationOut');
+    const durationQuickEl = document.getElementById('durationQuick');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const actionBtn = document.getElementById('actionBtn');
+
+    let state = {
+      status: 'idle', // idle | running | paused | done
+      totalMs: DURATION_MS_DEFAULT,
+      remainingMs: DURATION_MS_DEFAULT,
+      endTimestamp: null,
+      rafId: null,
+      overlayVisible: false,
+      overlayMode: null, // null | 'peek' | 'paused'
+      peekHideTimer: null,
+    };
+
+    let savedPresets = [];
+    let activeTab = 'presets';
+    let tabOptions = {}; // cached generated options per generation tab
+
+  // --- Color utilities ---
+
+    function hexToRgb(hex) {
+      const h = hex.replace('#', '');
+      const n = parseInt(h.length === 3
+        ? h.split('').map(c => c + c).join('')
+        : h, 16);
+      return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+    }
+
+    function rgbToHex(r, g, b) {
+      const toHex = v => Math.round(v).toString(16).padStart(2, '0');
+      return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+    }
+
+    function hslToHex(h, s, l) {
+      const sat = s / 100;
+      const lit = l / 100;
+      const c = (1 - Math.abs(2 * lit - 1)) * sat;
+      const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+      const m = lit - c / 2;
+      let r = 0;
+      let g = 0;
+      let b = 0;
+
+      if (h < 60) { r = c; g = x; }
+      else if (h < 120) { r = x; g = c; }
+      else if (h < 180) { g = c; b = x; }
+      else if (h < 240) { g = x; b = c; }
+      else if (h < 300) { r = x; b = c; }
+      else { r = c; b = x; }
+
+      return rgbToHex((r + m) * 255, (g + m) * 255, (b + m) * 255);
+    }
+
+    function rand(min, max) {
+      return min + Math.random() * (max - min);
+    }
+
+    // Opposite hue on the color wheel (hue ± 180°)
+    function pairComplementary() {
+      const h1 = Math.random() * 360;
+      const s1 = rand(58, 90);
+      const l1 = rand(42, 64);
+      const h2 = (h1 + 180) % 360;
+      const s2 = rand(52, 88);
+      const l2 = rand(36, 62);
+      return { start: hslToHex(h1, s1, l1), end: hslToHex(h2, s2, l2) };
+    }
+
+    // Opposite brightness — light vs dark, near-neutral (white/black-style)
+    function pairContrast() {
+      const h = Math.random() * 360;
+      const s = rand(0, 16);
+      const light = hslToHex(h, s, rand(88, 100));
+      const dark = hslToHex(h, s, rand(4, 15));
+      return Math.random() < 0.5
+        ? { start: light, end: dark }
+        : { start: dark, end: light };
+    }
+
+    // Same hue, opposite lightness — one color going light ↔ dark
+    function pairSameHue() {
+      const h = Math.random() * 360;
+      const s = rand(45, 85);
+      const lightC = hslToHex(h, s, rand(72, 88));
+      const darkC = hslToHex(h, s, rand(16, 34));
+      return Math.random() < 0.5
+        ? { start: lightC, end: darkC }
+        : { start: darkC, end: lightC };
+    }
+
+    function randomPairForMode(mode) {
+      const generators = {
+        complementary: pairComplementary,
+        contrast: pairContrast,
+        sameHue: pairSameHue,
+      };
+      if (mode === 'mixed') {
+        const all = [pairComplementary, pairContrast, pairSameHue];
+        return all[Math.floor(Math.random() * all.length)]();
+      }
+      return (generators[mode] || pairComplementary)();
+    }
+
+    function generatePairsForType(type) {
+      const pairs = [];
+      const seen = new Set();
+      let attempts = 0;
+      while (pairs.length < RANDOM_PAIR_COUNT && attempts < 200) {
+        attempts++;
+        const pair = randomPairForMode(type);
+        const key = `${pair.start}-${pair.end}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        pairs.push(pair);
+      }
+      return pairs;
+    }
+
+    function lerpColor(startHex, endHex, t) {
+      const a = hexToRgb(startHex);
+      const b = hexToRgb(endHex);
+      const p = Math.min(1, Math.max(0, t));
+      return rgbToHex(
+        a.r + (b.r - a.r) * p,
+        a.g + (b.g - a.g) * p,
+        a.b + (b.b - a.b) * p
+      );
+    }
+
+    function applyBackground(progress) {
+      const color = lerpColor(startColorInput.value, endColorInput.value, progress);
+      canvas.style.backgroundColor = color;
+    }
+
+    function saveDuration(mins) {
+      try { localStorage.setItem(STORAGE_KEY_DURATION, String(mins)); } catch (_) {}
+    }
+
+    function loadDuration() {
+      try {
+        const mins = parseInt(localStorage.getItem(STORAGE_KEY_DURATION), 10);
+        if (mins >= 1 && mins <= 60) return mins;
+      } catch (_) {}
+      return 25;
+    }
+
+    function highlightActiveCard() {
+      const s = startColorInput.value.toLowerCase();
+      const e = endColorInput.value.toLowerCase();
+      document.querySelectorAll('.color-card').forEach((card) => {
+        const match = card.dataset.start?.toLowerCase() === s
+          && card.dataset.end?.toLowerCase() === e;
+        card.classList.toggle('active', match);
+      });
+    }
+
+    function loadSavedPresetsFromStorage() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_SAVED_PRESETS);
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          savedPresets = parsed.filter((p) => p && p.start && p.end && p.id);
+        }
+      } catch (_) {
+        savedPresets = [];
+      }
+    }
+
+    function persistSavedPresets() {
+      try { localStorage.setItem(STORAGE_KEY_SAVED_PRESETS, JSON.stringify(savedPresets)); } catch (_) {}
+    }
+
+    function makePaletteId() {
+      if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+      return `palette-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+
+    function saveColorPair(start, end) {
+      if (savedPresets.some((p) => p.start === start && p.end === end)) return false;
+      if (savedPresets.length >= MAX_SAVED_PRESETS) savedPresets.shift();
+
+      savedPresets.push({
+        id: makePaletteId(),
+        name: `Palette ${savedPresets.length + 1}`,
+        start,
+        end,
+      });
+      persistSavedPresets();
+      if (activeTab === 'saved') renderColorTab();
+      return true;
+    }
+
+    function deleteSavedPreset(id) {
+      savedPresets = savedPresets.filter((p) => p.id !== id);
+      persistSavedPresets();
+      if (activeTab === 'saved') renderColorTab();
+    }
+
+    function saveCurrentPalette() {
+      if (state.status === 'running') return;
+      const added = saveColorPair(startColorInput.value, endColorInput.value);
+      // Give feedback by jumping to the Saved tab when a new one is stored.
+      if (added && activeTab !== 'saved') setActiveTab('saved');
+    }
+
+    function formatTime(ms) {
+      const totalSec = Math.ceil(ms / 1000);
+      const m = Math.floor(totalSec / 60);
+      const s = totalSec % 60;
+      return `${m}:${String(s).padStart(2, '0')}`;
+    }
+
+    function getProgress() {
+      if (state.totalMs <= 0) return 1;
+      const elapsed = state.totalMs - state.remainingMs;
+      return elapsed / state.totalMs;
+    }
+
+    function updateUI() {
+      timerDisplay.textContent = formatTime(state.remainingMs);
+      applyBackground(getProgress());
+
+      const labels = {
+        idle: 'Ready',
+        running: 'Focusing',
+        paused: 'Paused',
+        done: 'Complete',
+      };
+      timerLabel.textContent = labels[state.status] || '';
+
+      pauseBtn.disabled = state.status !== 'running';
+      resetBtn.disabled = state.status === 'idle';
+
+      if (state.status === 'idle' || state.status === 'done') {
+        actionBtn.textContent = state.status === 'done' ? 'Restart' : 'Start';
+      } else if (state.status === 'paused') {
+        actionBtn.textContent = 'Continue';
+      } else {
+        actionBtn.textContent = 'Running';
+        actionBtn.disabled = true;
+      }
+
+      if (state.status === 'running') {
+        actionBtn.disabled = true;
+      } else {
+        actionBtn.disabled = false;
+      }
+
+      hint.classList.toggle('hidden', state.overlayVisible || state.status === 'running');
+
+      if (state.status === 'done') {
+        hint.textContent = 'Hold, drag up, or scroll up to reset · Click to peek';
+      } else {
+        hint.textContent = 'Click or move to peek · Double-tap to pause';
+      }
+
+      document.body.classList.toggle('gestures-enabled', state.status === 'done');
+    }
+
+    function tick() {
+      if (state.status !== 'running') return;
+
+      state.remainingMs = Math.max(0, state.endTimestamp - Date.now());
+
+      if (state.remainingMs <= 0) {
+        state.status = 'done';
+        state.remainingMs = 0;
+        cancelAnimationFrame(state.rafId);
+        state.rafId = null;
+      }
+
+      updateUI();
+
+      if (state.status === 'running') {
+        state.rafId = requestAnimationFrame(tick);
+      }
+    }
+
+    function pauseTimer() {
+      if (state.status !== 'running') return;
+      state.remainingMs = Math.max(0, state.endTimestamp - Date.now());
+      state.status = 'paused';
+      cancelAnimationFrame(state.rafId);
+      state.rafId = null;
+      updateUI();
+    }
+
+    function resumeTimer() {
+      if (state.status !== 'paused') return;
+      state.status = 'running';
+      state.endTimestamp = Date.now() + state.remainingMs;
+      cancelAnimationFrame(state.rafId);
+      state.rafId = requestAnimationFrame(tick);
+      updateUI();
+    }
+
+    function startTimer() {
+      const mins = parseInt(durationInput.value, 10);
+      saveDuration(mins);
+      state.totalMs = mins * 60 * 1000;
+      state.remainingMs = state.totalMs;
+      state.status = 'running';
+      state.endTimestamp = Date.now() + state.remainingMs;
+      forceHideOverlay();
+      cancelAnimationFrame(state.rafId);
+      state.rafId = requestAnimationFrame(tick);
+      updateUI();
+    }
+
+    function continueTimer() {
+      hideOverlay();
+    }
+
+    function resetTimer() {
+      cancelAnimationFrame(state.rafId);
+      state.rafId = null;
+      const mins = parseInt(durationInput.value, 10);
+      state.totalMs = mins * 60 * 1000;
+      state.remainingMs = state.totalMs;
+      state.status = 'idle';
+      state.endTimestamp = null;
+      forceHideOverlay();
+      applyBackground(0);
+      updateUI();
+    }
+
+    function gestureReset() {
+      if (state.status !== 'done') return;
+
+      cancelAnimationFrame(state.rafId);
+      state.rafId = null;
+      clearSingleTapTimer();
+      forceHideOverlay();
+
+      const mins = parseInt(durationInput.value, 10);
+      state.totalMs = mins * 60 * 1000;
+      state.remainingMs = state.totalMs;
+      state.status = 'running';
+      state.endTimestamp = Date.now() + state.remainingMs;
+
+      skipNextPointerUp = true;
+      suppressOverlayPauseUntil = Date.now() + 600;
+      applyBackground(0);
+      state.rafId = requestAnimationFrame(tick);
+      updateUI();
+    }
+
+  // --- Overlay: peek (no pause) vs paused (double-tap) ---
+
+    function clearPeekTimer() {
+      if (state.peekHideTimer) {
+        clearTimeout(state.peekHideTimer);
+        state.peekHideTimer = null;
+      }
+    }
+
+    function schedulePeekHide() {
+      clearPeekTimer();
+      state.peekHideTimer = setTimeout(() => {
+        if (state.overlayMode === 'peek') hideOverlay();
+      }, PEEK_DURATION_MS);
+    }
+
+    function showOverlayPaused() {
+      if (Date.now() < suppressOverlayPauseUntil) return;
+      clearPeekTimer();
+      state.overlayMode = 'paused';
+      state.overlayVisible = true;
+      overlay.classList.add('visible');
+      if (state.status === 'running') pauseTimer();
+      updateUI();
+      requestFit();
+    }
+
+    function showOverlayPeek() {
+      if (state.overlayMode === 'paused') return;
+
+      state.overlayMode = 'peek';
+      state.overlayVisible = true;
+      overlay.classList.add('visible');
+      schedulePeekHide();
+      updateUI();
+      requestFit();
+    }
+
+    function forceHideOverlay() {
+      clearPeekTimer();
+      state.overlayVisible = false;
+      state.overlayMode = null;
+      overlay.classList.remove('visible');
+    }
+
+    function hideOverlay() {
+      if (!state.overlayVisible) return;
+
+      const wasPausedMode = state.overlayMode === 'paused';
+      forceHideOverlay();
+
+      if (wasPausedMode && state.status === 'paused') resumeTimer();
+      updateUI();
+    }
+
+    function toggleOverlayPaused() {
+      if (Date.now() < suppressOverlayPauseUntil) return;
+      if (state.overlayVisible && state.overlayMode === 'paused') hideOverlay();
+      else showOverlayPaused();
+    }
+
+    let lastTap = { time: 0, x: 0, y: 0 };
+    let singleTapTimer = null;
+    let gesture = {
+      active: false,
+      pointerId: null,
+      pointerType: null,
+      captureTarget: null,
+      startX: 0,
+      startY: 0,
+      longPressTimer: null,
+      holdIndicatorTimer: null,
+      consumed: false,
+    };
+    let skipNextPointerUp = false;
+    let suppressOverlayPauseUntil = 0;
+    let scrollUpAccum = 0;
+    let scrollUpTimer = null;
+
+    function canGestureReset() {
+      return state.status === 'done';
+    }
+
+    function isInteractiveTarget(el) {
+      return Boolean(el.closest('button, input, textarea, select, a'));
+    }
+
+    function isGestureSurface(target) {
+      return canvas.contains(target) || overlay.contains(target);
+    }
+
+    function shouldHandleTapGestures(e) {
+      if (e.currentTarget === canvas) return true;
+      return e.currentTarget === overlay && e.target === overlay;
+    }
+
+    function clearSingleTapTimer() {
+      if (singleTapTimer) {
+        clearTimeout(singleTapTimer);
+        singleTapTimer = null;
+      }
+    }
+
+    function showHoldIndicator() {
+      const ringDuration = Math.max(LONG_PRESS_MS - HOLD_INDICATOR_DELAY_MS, 200);
+      holdIndicator.style.setProperty('--hold-duration', `${ringDuration}ms`);
+      holdIndicator.classList.add('active');
+      const ring = holdIndicator.querySelector('.hold-progress');
+      ring.style.animation = 'none';
+      ring.offsetHeight; // reflow to restart animation
+      ring.style.animation = '';
+    }
+
+    function hideHoldIndicator() {
+      holdIndicator.classList.remove('active');
+    }
+
+    function stopGestureTracking() {
+      document.removeEventListener('pointermove', handleDocumentPointerMove, true);
+      document.removeEventListener('pointerup', handleDocumentPointerUp, true);
+      document.removeEventListener('pointercancel', handleDocumentPointerCancel, true);
+    }
+
+    function cancelGesture() {
+      if (gesture.longPressTimer) {
+        clearTimeout(gesture.longPressTimer);
+        gesture.longPressTimer = null;
+      }
+      if (gesture.holdIndicatorTimer) {
+        clearTimeout(gesture.holdIndicatorTimer);
+        gesture.holdIndicatorTimer = null;
+      }
+      if (gesture.captureTarget && gesture.pointerId != null) {
+        try { gesture.captureTarget.releasePointerCapture(gesture.pointerId); } catch (_) {}
+      }
+      stopGestureTracking();
+      gesture.active = false;
+      gesture.pointerId = null;
+      gesture.pointerType = null;
+      gesture.captureTarget = null;
+      gesture.consumed = false;
+      hideHoldIndicator();
+    }
+
+    function startGestureTracking() {
+      document.addEventListener('pointermove', handleDocumentPointerMove, true);
+      document.addEventListener('pointerup', handleDocumentPointerUp, true);
+      document.addEventListener('pointercancel', handleDocumentPointerCancel, true);
+    }
+
+    function handleDocumentPointerMove(e) {
+      if (!gesture.active || e.pointerId !== gesture.pointerId) return;
+      handleGestureMove(e);
+    }
+
+    function handleDocumentPointerUp(e) {
+      if (!gesture.active || e.pointerId !== gesture.pointerId) return;
+      handlePointerUp(e);
+    }
+
+    function handleDocumentPointerCancel(e) {
+      if (!gesture.active || e.pointerId !== gesture.pointerId) return;
+      cancelGesture();
+    }
+
+    function swipeThreshold() {
+      return gesture.pointerType === 'mouse' ? SWIPE_MIN_UP_MOUSE : SWIPE_MIN_UP;
+    }
+
+    function isSwipeUp(dx, dy) {
+      const minUp = swipeThreshold();
+      return dy < -minUp && Math.abs(dx) < SWIPE_MAX_SIDE;
+    }
+
+    function triggerSwipeReset() {
+      if (gesture.consumed || !canGestureReset()) return;
+      gesture.consumed = true;
+      skipNextPointerUp = true;
+      hideHoldIndicator();
+      gestureReset();
+      cancelGesture();
+    }
+
+    function cancelLongPress() {
+      if (gesture.longPressTimer) {
+        clearTimeout(gesture.longPressTimer);
+        gesture.longPressTimer = null;
+      }
+      if (gesture.holdIndicatorTimer) {
+        clearTimeout(gesture.holdIndicatorTimer);
+        gesture.holdIndicatorTimer = null;
+      }
+      hideHoldIndicator();
+    }
+
+    function handlePointerDown(e) {
+      if (gesture.active) return;
+      if (!canGestureReset()) return;
+      if (!isGestureSurface(e.target)) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (isInteractiveTarget(e.target)) return;
+
+      e.preventDefault();
+      gesture.active = true;
+      gesture.pointerId = e.pointerId;
+      gesture.pointerType = e.pointerType;
+      gesture.captureTarget = document.body;
+      gesture.startX = e.clientX;
+      gesture.startY = e.clientY;
+      gesture.consumed = false;
+      clearSingleTapTimer();
+      startGestureTracking();
+
+      try { document.body.setPointerCapture(e.pointerId); } catch (_) {}
+
+      gesture.holdIndicatorTimer = setTimeout(() => {
+        if (!gesture.active || gesture.consumed) return;
+        showHoldIndicator();
+      }, HOLD_INDICATOR_DELAY_MS);
+
+      gesture.longPressTimer = setTimeout(() => {
+        if (!gesture.active) return;
+        gesture.consumed = true;
+        skipNextPointerUp = true;
+        hideHoldIndicator();
+        gestureReset();
+        cancelGesture();
+      }, LONG_PRESS_MS);
+    }
+
+    function handleGestureMove(e) {
+      if (!gesture.active || e.pointerId !== gesture.pointerId) return;
+      if (gesture.consumed) return;
+
+      const dx = e.clientX - gesture.startX;
+      const dy = e.clientY - gesture.startY;
+
+      if (isSwipeUp(dx, dy)) {
+        triggerSwipeReset();
+        return;
+      }
+
+      // Only abandon hold when clearly swiping up, not from small hand jitter.
+      if (dy < -28 && Math.abs(dx) < SWIPE_MAX_SIDE) {
+        cancelLongPress();
+      }
+    }
+
+    function handleGestureEnd(e) {
+      if (!gesture.active || e.pointerId !== gesture.pointerId) return false;
+
+      const dx = e.clientX - gesture.startX;
+      const dy = e.clientY - gesture.startY;
+      let consumed = gesture.consumed;
+
+      if (!consumed && canGestureReset() && isSwipeUp(dx, dy)) {
+        consumed = true;
+        gestureReset();
+      }
+
+      cancelGesture();
+      return consumed;
+    }
+
+    function handlePointerUp(e) {
+      if (skipNextPointerUp) {
+        skipNextPointerUp = false;
+        lastTap = { time: 0, x: 0, y: 0 };
+        return;
+      }
+
+      const gestureHandled = gesture.active && e.pointerId === gesture.pointerId
+        ? handleGestureEnd(e)
+        : false;
+
+      if (gestureHandled) {
+        lastTap = { time: 0, x: 0, y: 0 };
+        return;
+      }
+
+      if (!shouldHandleTapGestures(e)) return;
+
+      const x = e.clientX ?? e.changedTouches?.[0]?.clientX ?? 0;
+      const y = e.clientY ?? e.changedTouches?.[0]?.clientY ?? 0;
+      const now = Date.now();
+      const dt = now - lastTap.time;
+      const dx = x - lastTap.x;
+      const dy = y - lastTap.y;
+      const dist = Math.hypot(dx, dy);
+
+      if (dt < DOUBLE_TAP_MS && dist < DOUBLE_TAP_DISTANCE) {
+        e.preventDefault();
+        clearSingleTapTimer();
+        toggleOverlayPaused();
+        lastTap = { time: 0, x: 0, y: 0 };
+        return;
+      }
+
+      lastTap = { time: now, x, y };
+
+      clearSingleTapTimer();
+      singleTapTimer = setTimeout(() => {
+        singleTapTimer = null;
+        showOverlayPeek();
+      }, DOUBLE_TAP_MS);
+    }
+
+    function handlePointerMove(e) {
+      if (gesture.active && e.pointerId === gesture.pointerId) {
+        handleGestureMove(e);
+      }
+      if (state.overlayMode === 'paused') return;
+      if (gesture.active && canGestureReset()) return;
+      if (state.status === 'done') return;
+      showOverlayPeek();
+    }
+
+    function clearScrollUpAccum() {
+      scrollUpAccum = 0;
+      if (scrollUpTimer) {
+        clearTimeout(scrollUpTimer);
+        scrollUpTimer = null;
+      }
+    }
+
+    function handleWheel(e) {
+      if (!canGestureReset()) return;
+      if (isInteractiveTarget(e.target)) return;
+
+      // Wheel up is negative deltaY in the standard convention.
+      if (e.deltaY >= 0) {
+        clearScrollUpAccum();
+        return;
+      }
+
+      scrollUpAccum += Math.abs(e.deltaY);
+      if (scrollUpTimer) clearTimeout(scrollUpTimer);
+      scrollUpTimer = setTimeout(clearScrollUpAccum, SCROLL_ACCUMULATE_MS);
+
+      if (scrollUpAccum >= SCROLL_UP_RESET_THRESHOLD) {
+        e.preventDefault();
+        clearScrollUpAccum();
+        gestureReset();
+      }
+    }
+
+    function handleOverlayPointerMove(e) {
+      handlePointerMove(e);
+      if (state.overlayMode === 'peek') schedulePeekHide();
+    }
+
+    canvas.addEventListener('pointerdown', handlePointerDown);
+    canvas.addEventListener('pointerup', handlePointerUp);
+    canvas.addEventListener('pointercancel', cancelGesture);
+    canvas.addEventListener('pointermove', handlePointerMove);
+    canvas.addEventListener('mousemove', handlePointerMove);
+
+    overlay.addEventListener('pointerdown', handlePointerDown, true);
+    overlay.addEventListener('pointerup', handlePointerUp);
+    overlay.addEventListener('pointercancel', cancelGesture);
+    overlay.addEventListener('pointermove', handleOverlayPointerMove);
+    overlay.addEventListener('mousemove', handleOverlayPointerMove);
+
+    window.addEventListener('wheel', handleWheel, { passive: false });
+
+  // --- Scale-to-fit (never scroll) ---
+
+    let fitScheduled = false;
+
+    function fitPanelToViewport() {
+      panel.style.transform = 'none';
+      const styles = getComputedStyle(overlay);
+      const padY = parseFloat(styles.paddingTop) + parseFloat(styles.paddingBottom);
+      const available = overlay.clientHeight - padY;
+      const needed = panel.offsetHeight;
+      if (needed > 0 && needed > available) {
+        const scale = Math.max(0.4, available / needed);
+        panel.style.transform = `scale(${scale})`;
+      }
+    }
+
+    function requestFit() {
+      if (fitScheduled) return;
+      fitScheduled = true;
+      requestAnimationFrame(() => {
+        fitScheduled = false;
+        fitPanelToViewport();
+      });
+    }
+
+    window.addEventListener('resize', requestFit);
+    window.addEventListener('orientationchange', requestFit);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', requestFit);
+    }
+
+  // --- Presets ---
+
+    function setColors(start, end) {
+      startColorInput.value = start;
+      endColorInput.value = end;
+      startHex.textContent = start;
+      endHex.textContent = end;
+      highlightActiveCard();
+
+      if (state.status === 'idle' || state.status === 'done') {
+        applyBackground(state.status === 'done' ? 1 : 0);
+      } else {
+        applyBackground(getProgress());
+      }
+    }
+
+    function getActiveTab() {
+      return COLOR_TABS.find((t) => t.id === activeTab) || COLOR_TABS[0];
+    }
+
+    function makeColorCard(item, opts = {}) {
+      const card = document.createElement('div');
+      card.className = 'color-card';
+      card.dataset.start = item.start;
+      card.dataset.end = item.end;
+      card.setAttribute('role', 'button');
+      card.tabIndex = 0;
+      const label = item.name || `Option ${(opts.index ?? 0) + 1}`;
+      card.innerHTML = `
+        ${opts.showDelete ? '<button type="button" class="card-delete" aria-label="Delete palette">×</button>' : ''}
+        <div class="preset-swatches">
+          <span class="swatch" style="background:${item.start}"></span>
+          <span class="swatch" style="background:${item.end}"></span>
+        </div>
+        <span>${label}</span>
+        ${opts.showSave ? '<span class="card-save">Save</span>' : ''}
+      `;
+
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.card-save') || e.target.closest('.card-delete')) return;
+        if (state.status === 'running') return;
+        setColors(item.start, item.end);
+      });
+
+      if (opts.showSave) {
+        card.querySelector('.card-save').addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (state.status === 'running') return;
+          saveColorPair(item.start, item.end);
+        });
+      }
+      if (opts.showDelete) {
+        card.querySelector('.card-delete').addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (state.status === 'running') return;
+          deleteSavedPreset(item.id);
+        });
+      }
+      return card;
+    }
+
+    function renderColorTab() {
+      const tab = getActiveTab();
+
+      document.querySelectorAll('.color-tab').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.tab === activeTab);
+      });
+
+      // Randomize only applies to generation tabs.
+      randomizeBtn.disabled = !tab.type;
+
+      colorCardsEl.innerHTML = '';
+
+      if (tab.saved) {
+        if (savedPresets.length === 0) {
+          const empty = document.createElement('div');
+          empty.className = 'color-cards-empty';
+          empty.textContent = 'No saved palettes yet — pick colors and tap Save palette.';
+          colorCardsEl.appendChild(empty);
+          requestFit();
+          return;
+        }
+        savedPresets.forEach((preset) => {
+          colorCardsEl.appendChild(makeColorCard(preset, { showDelete: true }));
+        });
+        highlightActiveCard();
+        requestFit();
+        return;
+      }
+
+      let items;
+      if (tab.curated) {
+        items = PRESETS;
+      } else {
+        if (!tabOptions[tab.id]) tabOptions[tab.id] = generatePairsForType(tab.type);
+        items = tabOptions[tab.id];
+      }
+
+      items.forEach((item, i) => {
+        colorCardsEl.appendChild(makeColorCard(item, { showSave: !tab.curated, index: i }));
+      });
+      highlightActiveCard();
+      requestFit();
+    }
+
+    function randomizeColors() {
+      if (state.status === 'running') return;
+      const tab = getActiveTab();
+      if (!tab.type) return;
+      tabOptions[tab.id] = generatePairsForType(tab.type);
+      renderColorTab();
+    }
+
+    function saveActiveTab(id) {
+      try { localStorage.setItem(STORAGE_KEY_TAB, id); } catch (_) {}
+    }
+
+    function loadActiveTab() {
+      try {
+        const id = localStorage.getItem(STORAGE_KEY_TAB);
+        if (COLOR_TABS.some((t) => t.id === id)) return id;
+      } catch (_) {}
+      return 'presets';
+    }
+
+    function setActiveTab(id) {
+      activeTab = id;
+      saveActiveTab(id);
+      renderColorTab();
+    }
+
+    function buildColorTabs() {
+      COLOR_TABS.forEach((tab) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'color-tab';
+        btn.dataset.tab = tab.id;
+        btn.textContent = tab.label;
+        btn.addEventListener('click', () => setActiveTab(tab.id));
+        colorTabsEl.appendChild(btn);
+      });
+    }
+
+    function updateDurationQuickPicks() {
+      const current = parseInt(durationInput.value, 10);
+      document.querySelectorAll('.duration-quick-btn').forEach((btn) => {
+        btn.classList.toggle('active', parseInt(btn.dataset.mins, 10) === current);
+      });
+    }
+
+    function setDuration(mins) {
+      durationInput.value = mins;
+      durationOut.textContent = `${mins}m`;
+      saveDuration(mins);
+      updateDurationQuickPicks();
+      if (state.status === 'idle' || state.status === 'done') {
+        state.totalMs = mins * 60 * 1000;
+        state.remainingMs = state.totalMs;
+        updateUI();
+      }
+    }
+
+    function buildDurationQuickPicks() {
+      DURATION_QUICK_PICKS.forEach((mins) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'duration-quick-btn';
+        btn.dataset.mins = mins;
+        btn.textContent = `${mins}m`;
+        btn.addEventListener('click', () => {
+          if (state.status === 'running') return;
+          setDuration(mins);
+        });
+        durationQuickEl.appendChild(btn);
+      });
+      updateDurationQuickPicks();
+    }
+
+  // --- Event listeners ---
+
+    startColorInput.addEventListener('input', () => {
+      startHex.textContent = startColorInput.value;
+      highlightActiveCard();
+      if (state.status === 'idle') applyBackground(0);
+      else if (state.status !== 'running') applyBackground(getProgress());
+    });
+
+    endColorInput.addEventListener('input', () => {
+      endHex.textContent = endColorInput.value;
+      highlightActiveCard();
+      if (state.status === 'idle') applyBackground(0);
+      else applyBackground(getProgress());
+    });
+
+    durationInput.addEventListener('input', () => {
+      const mins = parseInt(durationInput.value, 10);
+      durationOut.textContent = `${mins}m`;
+      saveDuration(mins);
+      updateDurationQuickPicks();
+      if (state.status === 'idle' || state.status === 'done') {
+        state.totalMs = parseInt(durationInput.value, 10) * 60 * 1000;
+        state.remainingMs = state.totalMs;
+        updateUI();
+      }
+    });
+
+    actionBtn.addEventListener('click', () => {
+      if (state.status === 'idle' || state.status === 'done') startTimer();
+      else if (state.status === 'paused') continueTimer();
+    });
+
+    pauseBtn.addEventListener('click', () => {
+      if (state.status === 'running') showOverlayPaused();
+    });
+    resetBtn.addEventListener('click', resetTimer);
+    randomizeBtn.addEventListener('click', randomizeColors);
+    savePaletteBtn.addEventListener('click', saveCurrentPalette);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && state.overlayVisible) hideOverlay();
+    });
+
+  // --- Init ---
+
+    loadSavedPresetsFromStorage();
+    activeTab = loadActiveTab();
+    buildColorTabs();
+    buildDurationQuickPicks();
+    setDuration(loadDuration());
+    setColors(PRESETS[0].start, PRESETS[0].end);
+    renderColorTab();
+    updateUI();
+    showOverlayPaused();
+  })();
+  </script>
+</body>
+</html>
