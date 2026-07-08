@@ -142,6 +142,30 @@
     will-change: transform;
   }
 
+  .panel-title {
+    text-align: center;
+    margin-bottom: 14px;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--text);
+  }
+
+  .panel-title-text {
+    position: relative;
+    display: inline-block;
+  }
+
+  .panel-title-icon {
+    position: absolute;
+    right: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+    margin-right: 8px;
+    width: 20px;
+    height: 20px;
+  }
+
   .timer-display {
     text-align: center;
     font-variant-numeric: tabular-nums;
@@ -616,6 +640,12 @@
 
   <div id="overlay">
     <div class="panel">
+      <div class="panel-title">
+        <span class="panel-title-text">
+          <img src="favicon.svg" alt="" class="panel-title-icon">
+          Colodoro
+        </span>
+      </div>
       <div class="timer-display" id="timerDisplay">25:00</div>
       <div class="timer-label" id="timerLabel">Ready</div>
 
