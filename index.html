@@ -544,6 +544,17 @@
     transform: translateY(0);
   }
 
+  .color-save-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  .color-save-btn:disabled:hover {
+    color: var(--muted);
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
   .saved-presets {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -1184,6 +1195,25 @@
       return savedPresets.some((p) => p.start === start && p.end === end);
     }
 
+    function isPresetPair(start, end) {
+      const s = start.toLowerCase();
+      const e = end.toLowerCase();
+      return PRESETS.some((p) => p.start.toLowerCase() === s && p.end.toLowerCase() === e);
+    }
+
+    function updateSavePaletteBtn() {
+      const start = startColorInput.value;
+      const end = endColorInput.value;
+      const preset = isPresetPair(start, end);
+      const saved = isPairSaved(start, end);
+      savePaletteBtn.disabled = preset || saved;
+      savePaletteBtn.dataset.tooltip = preset
+        ? 'Already a preset'
+        : saved
+          ? 'Already saved'
+          : 'Save this color pair';
+    }
+
     function saveColorPair(start, end) {
       if (isPairSaved(start, end)) return false;
       if (savedPresets.length >= MAX_SAVED_PRESETS) savedPresets.shift();
@@ -1196,6 +1226,7 @@
       });
       persistSavedPresets();
       buildColorTabs();
+      updateSavePaletteBtn();
       if (getActiveTab().saved) renderColorTab();
       return true;
     }
@@ -1209,6 +1240,7 @@
         saveActiveTab(activeTab);
       }
       buildColorTabs();
+      updateSavePaletteBtn();
       renderColorTab();
     }
 
@@ -1863,6 +1895,7 @@
       startHex.textContent = start;
       endHex.textContent = end;
       highlightActiveCard();
+      updateSavePaletteBtn();
 
       if (state.status === 'idle' || state.status === 'done') {
         applyBackground(state.status === 'done' ? 1 : 0);
@@ -2069,6 +2102,7 @@
     startColorInput.addEventListener('input', () => {
       startHex.textContent = startColorInput.value;
       highlightActiveCard();
+      updateSavePaletteBtn();
       if (state.status === 'idle') applyBackground(0);
       else if (state.status !== 'running') applyBackground(getProgress());
     });
@@ -2076,6 +2110,7 @@
     endColorInput.addEventListener('input', () => {
       endHex.textContent = endColorInput.value;
       highlightActiveCard();
+      updateSavePaletteBtn();
       if (state.status === 'idle') applyBackground(0);
       else applyBackground(getProgress());
     });
